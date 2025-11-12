@@ -30,12 +30,12 @@ START_URL = "https://www.google.com"
 # -----------------------------------------------
 # !! IMPORTANT: UPDATE THIS SECTION !!
 MY_PROFILE = {
-    "first_name": "YourFirstName",
-    "last_name": "YourLastName",
-    "email": "your_email@gmail.com",
+    "first_name": "Basavaprasad",
+    "last_name": "Gola",
+    "email": "tobasavaprasad.com",
     "phone": "555-123-4567",
-    "linkedin": "https://linkedin.com/in/yourprofile",
-    "github": "https://github.com/yourusername",
+    "linkedin": "https://www.linkedin.com/in/basavaprasad-gola/",
+    "github": "https://github.com/prasadgola",
     "portfolio": "https://yourportfolio.com",
     # Windows Example: 'C:\\\\Users\\\\YourUser\\\\Documents\\\\resume_v3.pdf'
     # Mac/Linux Example: '/Users/YourUser/Documents/resume_v3.pdf'
