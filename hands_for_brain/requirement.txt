@@ -1,6 +1,0 @@
-google-generativeai
-undetected-chromedriver
-selenium
-python-dotenv
-litellm
-google-adk
