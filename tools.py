@@ -5,6 +5,10 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import StaleElementReferenceException
 import time
+import pyperclip
+from selenium.webdriver.common.keys import Keys
+import platform
+
 
 driver = None
 elements_cache = []
@@ -64,17 +68,56 @@ async def js_click(element_index: int) -> str:
     except Exception as e:
         return f"✗ Failed: {str(e)}"
 
+import pyperclip
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
+
+import platform
+
 async def type_text(element_index: int, text: str, clear_first: bool = True) -> str:
     global driver, elements_cache
     
     try:
         element = elements_cache[element_index]
-        if clear_first:
-            element.clear()
-        element.send_keys(text)
+        
+        contenteditable = element.get_attribute("contenteditable")
+        is_contenteditable = contenteditable == "true"
+        
+        # Detect Mac vs Windows/Linux
+        is_mac = platform.system() == "Darwin"
+        modifier_key = Keys.COMMAND if is_mac else Keys.CONTROL
+        print(f"  DEBUG: is_mac={is_mac}, using {'CMD' if is_mac else 'CTRL'}")
+        
+        if is_contenteditable:
+            print("  DEBUG: Using clipboard paste method")
+            
+            element.click()
+            time.sleep(0.3)
+            
+            if clear_first:
+                ActionChains(driver).key_down(modifier_key).send_keys('a').key_up(modifier_key).perform()
+                ActionChains(driver).send_keys(Keys.DELETE).perform()
+                time.sleep(0.2)
+            
+            # Paste from clipboard
+            import pyperclip
+            pyperclip.copy(text)
+            print(f"  DEBUG: Copied to clipboard: {pyperclip.paste()}")
+            
+            ActionChains(driver).key_down(modifier_key).send_keys('v').key_up(modifier_key).perform()
+            time.sleep(0.3)
+            print("  DEBUG: Pressed CMD+V")
+            
+        else:
+            if clear_first:
+                element.clear()
+            element.send_keys(text)
+        
         return f"✓ Typed '{text}' into element {element_index}"
     
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return f"✗ Failed: {str(e)}"
 
 
@@ -160,7 +203,7 @@ async def get_page_state(include_text: bool = False) -> str:
     global driver, elements_cache
     
     try:
-        new_cache = []  # Build separately
+        new_cache = []
         
         selectors = [
             "a[href]",
@@ -176,6 +219,7 @@ async def get_page_state(include_text: bool = False) -> str:
             "[tabindex='0']",
             "iframe",
             "input[type='file']",
+            "[contenteditable='true']",  # Make sure this is added
         ]
         
         all_elements = driver.find_elements(By.CSS_SELECTOR, ", ".join(selectors))
@@ -194,7 +238,10 @@ async def get_page_state(include_text: bool = False) -> str:
                     continue
                 
                 tag = element.tag_name
-                text = (element.text or element.get_attribute("value") or "")[:50].strip()
+                if tag in ("input", "textarea"):
+                    text = driver.execute_script("return arguments[0].value || ''", element)[:50].strip()
+                else:
+                    text = (element.text or "")[:50].strip()
                 placeholder = element.get_attribute("placeholder") or ""
                 el_type = element.get_attribute("type") or ""
                 aria_label = element.get_attribute("aria-label") or ""
@@ -211,6 +258,11 @@ async def get_page_state(include_text: bool = False) -> str:
                     desc += " [DISABLED]"
                 if checked:
                     desc += " [CHECKED]"
+                
+                # ADD THIS BLOCK HERE ↓
+                if element.get_attribute("contenteditable") == "true":
+                    desc += " [CONTENTEDITABLE]"
+                
                 if text:
                     desc += f" '{text}'"
                 elif placeholder:
@@ -240,21 +292,22 @@ async def get_page_state(include_text: bool = False) -> str:
 
 
 async def press_key(key: str) -> str:
-    """Press keyboard key: 'enter', 'tab', 'escape', 'backspace'"""
-    from selenium.webdriver.common.keys import Keys
     global driver
     
-    key_map = {
-        "enter": Keys.ENTER,
-        "tab": Keys.TAB,
-        "escape": Keys.ESCAPE,
-        "backspace": Keys.BACKSPACE,
-        "down": Keys.ARROW_DOWN,
-        "up": Keys.ARROW_UP,
-    }
-    
     try:
-        driver.switch_to.active_element.send_keys(key_map.get(key.lower(), key))
+        # Find the active/focused element and send key to it
+        active = driver.switch_to.active_element
+        
+        key_map = {
+            "enter": Keys.ENTER,
+            "tab": Keys.TAB,
+            "escape": Keys.ESCAPE,
+            "backspace": Keys.BACKSPACE,
+            "down": Keys.ARROW_DOWN,
+            "up": Keys.ARROW_UP,
+        }
+        
+        active.send_keys(key_map.get(key.lower(), key))
         time.sleep(0.3)
         return f"✓ Pressed {key}"
     except Exception as e:

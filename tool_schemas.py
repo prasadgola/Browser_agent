@@ -1,50 +1,3 @@
-"""
-Tool Schemas for GPT-OSS:20b
-Pure data - no imports, no functions
-"""
-
-# ============================================================
-# SYSTEM PROMPT
-# ============================================================
-SYSTEM_PROMPT = """You are a browser automation agent. Your job is to complete tasks by controlling a web browser.
-
-## CRITICAL RULES:
-
-1. **Always call get_page_state() first** after:
-   - Opening the browser
-   - Navigating to a URL (open_url)
-   - Clicking any element
-   - Scrolling the page
-   - Switching tabs or iframes
-
-2. **Use element indices from the LATEST get_page_state() only**
-   - Element indices change after every page update
-   - Never use indices from old page states
-
-3. **Work step by step**
-   - Do ONE action at a time
-   - Observe the result before the next action
-   - If something fails, try an alternative approach
-
-4. **Common patterns**:
-   - To submit a form: type_text() then click() the submit button, OR type_text() then press_key("enter")
-   - For dropdowns that aren't <select>: click() to open, then click() the option
-   - If click() fails: try js_click() instead
-   - If element not found: try scroll("down") then get_page_state()
-
-5. **When done**: Call task_complete() with a summary
-   **If stuck**: Call task_failed() with the reason
-
-## TOOL CATEGORIES:
-
-NAVIGATION: open_browser, open_url, go_back, scroll, switch_tab, close_tab, close_browser
-INTERACTION: click, js_click, type_text, press_key, hover, select_option  
-OBSERVATION: get_page_state, get_text, get_page_text, wait_for_element, wait_for_page_load
-SPECIAL: upload_file, handle_alert, switch_to_iframe
-COMPLETION: task_complete, task_failed
-"""
-
-
 # ============================================================
 # BROWSER TOOLS - OpenAI-compatible format for GPT-OSS
 # ============================================================
@@ -52,35 +5,35 @@ BROWSER_TOOLS = [
     # ----------------------------------------------------------
     # NAVIGATION TOOLS
     # ----------------------------------------------------------
-    {
-        "type": "function",
-        "function": {
-            "name": "open_browser",
-            "description": "Opens a new browser window. Must be called first before any other browser action.",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "open_url",
-            "description": "Navigate the browser to a specific URL. Browser must be open first.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "The full URL to navigate to (e.g., 'https://google.com')"
-                    }
-                },
-                "required": ["url"]
-            }
-        }
-    },
+    # {
+    #     "type": "function",
+    #     "function": {
+    #         "name": "open_browser",
+    #         "description": "Opens a new browser window. Must be called first before any other browser action.",
+    #         "parameters": {
+    #             "type": "object",
+    #             "properties": {},
+    #             "required": []
+    #         }
+    #     }
+    # },
+    # {
+    #     "type": "function",
+    #     "function": {
+    #         "name": "open_url",
+    #         "description": "Navigate the browser to a specific URL. Browser must be open first.",
+    #         "parameters": {
+    #             "type": "object",
+    #             "properties": {
+    #                 "url": {
+    #                     "type": "string",
+    #                     "description": "The full URL to navigate to (e.g., 'https://google.com')"
+    #                 }
+    #             },
+    #             "required": ["url"]
+    #         }
+    #     }
+    # },
     {
         "type": "function",
         "function": {

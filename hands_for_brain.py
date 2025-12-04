@@ -17,8 +17,8 @@ from tools import (
 
 # Tool name → function mapping
 TOOL_MAP = {
-    "open_browser": open_browser,
-    "open_url": open_url,
+    # "open_browser": open_browser,
+    # "open_url": open_url,
     "click": click,
     "js_click": js_click,
     "type_text": type_text,
@@ -40,29 +40,43 @@ TOOL_MAP = {
     "wait_for_page_load": wait_for_page_load,
 }
 
-SYSTEM_PROMPT = """You are a browser automation agent. You see the current browser state and must decide the NEXT SINGLE ACTION to take.
+SYSTEM_PROMPT = """You are a browser automation agent. You start at Google.com and must navigate using search and clicking links.
 
 RULES:
 1. Output exactly ONE tool call per response
 2. Use element indices [0], [1], etc. from the browser state
-3. If the goal is achieved, call task_complete(message="...")
-4. If stuck after trying alternatives, call task_failed(reason="...")
+3. To visit a website: search for it on Google, then click the link
+4. If the goal is achieved, call task_complete(message="...")
+5. If stuck after trying alternatives, call task_failed(reason="...")
+
+NAVIGATION:
+- You start at Google - use the search box to find websites
+- Click on search results to navigate
+- Use links on pages to move around
+- Use go_back() to return to previous page
 
 TIPS:
-- To search: find the input field, type_text(), then click search button or press_key("enter")
+- To search: type_text() in search box, then press_key("enter") or click search button
 - If click() fails, try js_click()
+- Use hover() to reveal dropdown menus
 - If element not visible, scroll("down") first
-- For dropdowns: click to open, then click the option
 """
 
 
-def call_model(goal: str, browser_state: str) -> dict:
+def call_model(goal: str, browser_state: str, last_action: str) -> dict:
     """Call local model with goal + current state"""
     
     prompt = f"""GOAL: {goal}
 
+PREVIOUS ACTION:
+{last_action or "None (first step)"}
+
 CURRENT BROWSER STATE:
 {browser_state}
+
+IMPORTANT: Check the current URL and page title to understand where you are.
+- If URL shows /feed/ you are already logged in
+- If goal step is already done, move to the NEXT step
 
 Based on the current state, what is the next action to achieve the goal?"""
 
@@ -97,14 +111,20 @@ async def run_agent(goal: str, max_steps: int = 30):
     print(f"GOAL: {goal}")
     print(f"{'='*60}\n")
     
-    # Step 0: Open browser (hardcoded)
-    print("[Step 0] Opening browser...")
+    # Step 0: Open browser and go to Google
+    print("[Step 0] Opening browser at Google...")
     result = await open_browser()
     print(f"  → {result}")
     
     if "Failed" in result:
         print("Failed to open browser. Exiting.")
         return
+    
+    # Navigate to Google (hidden from model)
+    result = await open_url("https://google.com")
+    print(f"  → {result}")
+    
+    last_action = None
     
     # Main loop
     for step in range(1, max_steps + 1):
@@ -115,7 +135,7 @@ async def run_agent(goal: str, max_steps: int = 30):
         print(f"  State: {browser_state[:200]}...")
         
         # Call model
-        response = call_model(goal, browser_state)
+        response = call_model(goal, browser_state, last_action)
         msg = response.get("message", {})
         
         # Check for tool calls
@@ -155,6 +175,9 @@ async def run_agent(goal: str, max_steps: int = 30):
         # Execute the tool
         result = await execute_tool(name, args)
         print(f"  Result: {result}")
+
+        # Store for next iteration
+        last_action = f"{name}({args}) → {result}"
         
         # Small delay between actions
         await asyncio.sleep(0.5)
@@ -167,7 +190,10 @@ async def run_agent(goal: str, max_steps: int = 30):
 
 async def main():
     # Example usage
-    goal = input("Enter your goal (or press Enter for default): ").strip()
+    # goal = input("Enter your goal (or press Enter for default): ").strip()
+    goal = """
+
+    """
     
     if not goal:
         goal = "Go to google.com and search for 'weather today'"
