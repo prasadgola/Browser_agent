@@ -114,35 +114,121 @@ async def execute_tool(name: str, args: dict) -> str:
         return await func(**args)
     return f"✗ Unknown tool: {name}"
 
-async def click_send_button() -> str:
-    """Find and click Send button (works for WhatsApp, LinkedIn, etc.)"""
-    global driver
+
+async def whatsapp_upload_document(driver, file_path: str) -> str:
+    """
+    WhatsApp-specific upload that:
+    1. Clicks "Document" button in attachment menu
+    2. Waits for file input to be ready
+    3. Sends file to the correct input
+    """
+    import os
+    from selenium.webdriver.common.by import By
+    
+    print("  📎 WhatsApp upload flow started...")
+    
+    # Resolve file path
+    file_path = os.path.expanduser(file_path)
+    
+    if not os.path.isabs(file_path):
+        for base in [os.getcwd(), os.path.expanduser('~/Documents'), 
+                     os.path.expanduser('~/Downloads'), os.path.expanduser('~/Desktop')]:
+            full = os.path.join(base, file_path)
+            if os.path.exists(full):
+                file_path = full
+                break
+    
+    if not os.path.exists(file_path):
+        return f"✗ File not found: {file_path}"
     
     try:
-        # Try common Send button patterns
-        selectors = [
-            "[aria-label*='Send']",
-            "[aria-label*='send']", 
-            "[data-icon='send']",
-            "button[type='submit']",
-            "[role='button'][aria-label*='Send']",
-        ]
+        # Step 1: Click "Document" button
+        print("  Step 1: Looking for Document button...")
         
-        for selector in selectors:
-            try:
-                elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                for el in elements:
-                    if el.is_displayed():
-                        el.click()
-                        time.sleep(0.5)
-                        return f"✓ Clicked Send button ({selector})"
-            except:
-                continue
+        doc_clicked = driver.execute_script("""
+            // Try multiple selectors for Document button
+            var selectors = [
+                '[data-icon="attach-document"]',
+                'span[data-icon="attach-document"]',
+                'li[data-animate-dropdown-item="2"]',  // Document is usually 2nd item
+                'button[aria-label*="Document"]'
+            ];
+            
+            for (var i = 0; i < selectors.length; i++) {
+                var el = document.querySelector(selectors[i]);
+                if (el) {
+                    // Find clickable parent if needed
+                    var clickTarget = el.closest('button') || el.closest('li') || el.closest('[role="button"]') || el;
+                    clickTarget.click();
+                    return 'clicked: ' + selectors[i];
+                }
+            }
+            
+            // Fallback: find by text content
+            var items = document.querySelectorAll('li, div[role="button"], button');
+            for (var j = 0; j < items.length; j++) {
+                if (items[j].textContent.includes('Document')) {
+                    items[j].click();
+                    return 'clicked by text';
+                }
+            }
+            
+            return 'not found';
+        """)
         
-        return "✗ Send button not found"
-    
+        print(f"  Document button: {doc_clicked}")
+        
+        if doc_clicked == 'not found':
+            return "✗ Could not find Document button in menu"
+        
+        # Step 2: Wait for file input to be ready
+        await asyncio.sleep(1)
+        
+        # Step 3: Find and use the correct file input
+        print("  Step 2: Finding file input...")
+        
+        # Get all file inputs
+        file_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
+        print(f"  Found {len(file_inputs)} file inputs")
+        
+        # Log them
+        for i, fi in enumerate(file_inputs):
+            accept = fi.get_attribute("accept") or "(none)"
+            print(f"    [{i}] accept='{accept}'")
+        
+        # For documents, we want the input that:
+        # - Has accept="*" OR
+        # - Has no accept attribute OR  
+        # - Doesn't have "image" in accept
+        
+        target_input = None
+        for fi in file_inputs:
+            accept = (fi.get_attribute("accept") or "").lower()
+            if accept == "*" or accept == "" or "image" not in accept:
+                target_input = fi
+                print(f"  Selected input with accept='{accept}'")
+                break
+        
+        # Fallback to last input
+        if not target_input and file_inputs:
+            target_input = file_inputs[-1]
+            print("  Using last input as fallback")
+        
+        if not target_input:
+            return "✗ No file input found after clicking Document"
+        
+        # Step 4: Send file
+        print(f"  Step 3: Sending file {os.path.basename(file_path)}...")
+        target_input.send_keys(file_path)
+        
+        await asyncio.sleep(2)  # Wait for preview
+        
+        return f"✓ Document uploaded: {os.path.basename(file_path)}"
+        
     except Exception as e:
-        return f"✗ Failed: {str(e)}"
+        import traceback
+        traceback.print_exc()
+        return f"✗ Upload failed: {str(e)}"
 
 
 async def run_agent(goal: str, max_steps: int = 100):
@@ -175,49 +261,80 @@ async def run_agent(goal: str, max_steps: int = 100):
     file_uploaded = False
     file_sent = False
     
+    # Import driver for direct access
+    from tools import driver
+    
     for step in range(1, max_steps + 1):
         print(f"\n[Step {step}]")
         
         browser_state = await get_page_state(include_text=False)
         print(f"  State: {browser_state[:500]}...")
         
-        # DETECT states
-        attachment_menu_open = "Document" in browser_state and "Photos & videos" in browser_state
+        # Detect WhatsApp
+        is_whatsapp = 'whatsapp' in browser_state.lower() or 'whatsapp' in driver.current_url.lower()
         
-        # DETECT: File preview showing
+        # DETECT: Attachment menu is open (has Document option visible)
+        attachment_menu_open = "Document" in browser_state and "Photos" in browser_state
+        
+        # DETECT: File preview showing (ready to send)
         file_preview_showing = (
             file_uploaded and 
             not file_sent and
-            "Type a message" in browser_state and
-            "1 page" in browser_state
+            ("Type a message" in browser_state or "Add a caption" in browser_state or "1 page" in browser_state)
         )
+        
+        # ===== WHATSAPP: AUTO-HANDLE ATTACHMENT MENU =====
+        if is_whatsapp and attachment_menu_open and target_filename and not file_uploaded:
+            print(f"  📎 WHATSAPP: Attachment menu detected, using special upload flow...")
+            
+            result = await whatsapp_upload_document(driver, target_filename)
+            print(f"  Result: {result}")
+            
+            if "✓" in result:
+                file_uploaded = True
+                last_action = result
+            else:
+                failures.append(result)
+                last_action = result
+            
+            await asyncio.sleep(1)
+            continue
         
         # ===== AUTO-CLICK SEND AFTER UPLOAD =====
         if file_preview_showing:
-            print(f"  📎 File preview detected, clicking Send via JS...")
-            
-            from tools import driver
+            print(f"  📎 File preview detected, clicking Send...")
             
             try:
                 result = driver.execute_script("""
-                    var sendBtn = document.querySelector('[aria-label="Send"]');
-                    if (sendBtn) {
-                        sendBtn.click();
-                        return 'clicked';
+                    // Try multiple Send button selectors
+                    var selectors = [
+                        '[aria-label="Send"]',
+                        '[data-icon="send"]',
+                        'span[data-icon="send"]',
+                        'button[aria-label*="Send"]'
+                    ];
+                    
+                    for (var i = 0; i < selectors.length; i++) {
+                        var el = document.querySelector(selectors[i]);
+                        if (el) {
+                            var btn = el.closest('button') || el.closest('[role="button"]') || el;
+                            btn.click();
+                            return 'clicked: ' + selectors[i];
+                        }
                     }
                     return 'not found';
                 """)
-                print(f"  JS result: {result}")
+                print(f"  Send button: {result}")
                 
-                if result == 'clicked':
+                if result != 'not found':
                     file_sent = True
                     last_action = "✓ Clicked Send button"
                     await asyncio.sleep(1)
                     continue
             except Exception as e:
-                print(f"  JS error: {e}")
+                print(f"  Send error: {e}")
         
-        # Call model
+        # ===== NORMAL MODEL FLOW =====
         response = call_model(goal, browser_state, last_action, failures)
         msg = response.get("message", {})
         tool_calls = msg.get("tool_calls")
@@ -238,17 +355,20 @@ async def run_agent(goal: str, max_steps: int = 100):
             import json
             args = json.loads(args) if args else {}
         
-        # ===== INTERCEPT BAD ACTIONS =====
-        
-        if attachment_menu_open and target_filename and not file_uploaded:
-            print(f"  ⚠️ INTERCEPTED: Menu open, forcing upload_file_auto")
-            name = "upload_file_auto"
-            args = {"file_path": target_filename}
-        
-        elif attachment_menu_open and file_uploaded:
-            print(f"  ⚠️ INTERCEPTED: Menu open but already uploaded, pressing escape")
-            name = "press_key"
-            args = {"key": "escape"}
+        # ===== INTERCEPT: If model tries to upload on WhatsApp, use special flow =====
+        if is_whatsapp and name == "upload_file_auto" and not file_uploaded:
+            print(f"  ⚠️ Redirecting to WhatsApp upload flow...")
+            result = await whatsapp_upload_document(driver, args.get("file_path", target_filename))
+            print(f"  Result: {result}")
+            
+            if "✓" in result:
+                file_uploaded = True
+            else:
+                failures.append(result)
+            
+            last_action = result
+            await asyncio.sleep(0.5)
+            continue
         
         print(f"  Action: {name}({args})")
         
@@ -266,7 +386,7 @@ async def run_agent(goal: str, max_steps: int = 100):
         
         if name == "upload_file_auto" and "✓" in result:
             file_uploaded = True
-            print(f"  📎 File upload tracked - won't upload again")
+            print(f"  📎 File upload tracked")
         
         if "✗" in result:
             failures.append(f"{name}({args}) → {result}")
@@ -289,11 +409,8 @@ async def run_agent(goal: str, max_steps: int = 100):
 
 
 async def main():
-    # Example usage
-    # goal = input("Enter your goal (or press Enter for default): ").strip()
     goal = """
-    apply for software jobs on indeed with username tobasavaprasad@gmail.com
-    Use button like continue or apply.
+    send basavaprasad_resume.pdf to channu on whatsapp.
     """
     
     if not goal:
