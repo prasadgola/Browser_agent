@@ -16,32 +16,20 @@ elements_cache = []
 async def open_browser() -> str:
     global driver
     
-    try:
-        options = uc.ChromeOptions()
-        options.add_argument('--disable-blink-features=AutomationControlled')
-        options.add_argument('--start-maximized')
-
-        profile_path = os.path.expanduser('~/AI Studio/chrome_automation_profile')
-        
-        driver = uc.Chrome(options=options, version_main=142, user_data_dir=profile_path)
-
-        
-        return "✓ Browser opened"
-    
-    except Exception as e:
-        return f"✗ Failed: {str(e)}"
+    options = uc.ChromeOptions()
+    options.add_argument('--disable-blink-features=AutomationControlled')
+    options.add_argument('--start-maximized')
+    options.add_argument('--window-position=-2000,0')
+    options.add_argument('--window-size=1920,1080')
+    profile_path = os.path.expanduser('~/AI Studio/chrome_automation_profile')
+    driver = uc.Chrome(options=options, version_main=142, user_data_dir=profile_path)
 
 
 async def open_url(url: str) -> str:
     global driver
     
-    try:
-        driver.get(url)
-        time.sleep(1)
-        return f"✓ Navigated to: {url}"
-    
-    except Exception as e:
-        return f"✗ Failed: {str(e)}"
+    driver.get(url)
+    time.sleep(1)
 
 
 async def click(element_index: int) -> str:
@@ -144,8 +132,6 @@ async def scroll(direction: str = "down", amount: int = 500) -> str:
 # tools.py - Universal get_page_state()
 
 async def get_page_state(include_text: bool = False, verbosity: str = "normal") -> str:
-    print("get_page_state")
-    time.sleep(2)
     """
     Extract page state that works for ANY website.
     
@@ -329,8 +315,6 @@ async def get_page_state(include_text: bool = False, verbosity: str = "normal") 
         return f"✗ Failed: {str(e)}"
 
 async def find_elements_by_text(text: str, element_type: str = None) -> str:
-    print("find_elements_by_text")
-    time.sleep(2)
     """
     Universal text search - works on any website.
     
@@ -430,8 +414,6 @@ async def find_elements_by_text(text: str, element_type: str = None) -> str:
 
 
 async def click_element_with_text(text: str) -> str:
-    print("click_element_with_text")
-    time.sleep(2)   
     """Universal click-by-text - tries multiple strategies"""
     global driver
     
@@ -483,8 +465,6 @@ async def click_element_with_text(text: str) -> str:
 
 
 async def press_key(key: str) -> str:
-    print("press_key")
-    time.sleep(2)   
     global driver
     
     try:
@@ -508,8 +488,6 @@ async def press_key(key: str) -> str:
 
 
 async def hover(element_index: int) -> str:
-    print("hover")
-    time.sleep(2)
     """Hover over element to trigger dropdowns/tooltips"""
     global driver, elements_cache
     
@@ -584,8 +562,6 @@ async def upload_file_auto(file_path: str) -> str:
 
 
 async def go_back() -> str:
-    print("go_back")
-    time.sleep(2)
     """Navigate back in browser history"""
     global driver
     
@@ -598,8 +574,6 @@ async def go_back() -> str:
 
 
 async def handle_alert(action: str = "accept") -> str:
-    print("handle_alert")
-    time.sleep(2)
     """Handle JS alert: 'accept' or 'dismiss'"""
     global driver
     
