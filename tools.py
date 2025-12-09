@@ -8,6 +8,7 @@ import time
 import pyperclip
 from selenium.webdriver.common.keys import Keys
 import platform
+import os
 
 driver = None
 elements_cache = []
@@ -19,8 +20,10 @@ async def open_browser() -> str:
         options = uc.ChromeOptions()
         options.add_argument('--disable-blink-features=AutomationControlled')
         options.add_argument('--start-maximized')
+
+        profile_path = os.path.expanduser('~/AI Studio/chrome_automation_profile')
         
-        driver = uc.Chrome(options=options, version_main=142)
+        driver = uc.Chrome(options=options, version_main=142, user_data_dir=profile_path)
 
         
         return "✓ Browser opened"
