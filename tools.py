@@ -1,11 +1,9 @@
-import undetected_chromedriver as uc
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait, Select
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.common.exceptions import StaleElementReferenceException
 import time
 import pyperclip
+import undetected_chromedriver as uc
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.common.exceptions import StaleElementReferenceException
 from selenium.webdriver.common.keys import Keys
 import platform
 import os
@@ -15,7 +13,6 @@ elements_cache = []
 
 async def open_browser() -> str:
     global driver
-    
     options = uc.ChromeOptions()
     options.add_argument('--disable-blink-features=AutomationControlled')
     options.add_argument('--start-maximized')
@@ -27,84 +24,35 @@ async def open_browser() -> str:
 
 async def open_url(url: str) -> str:
     global driver
-    
     driver.get(url)
-    time.sleep(1)
 
 
-async def click(element_index: int) -> str:
-    global driver, elements_cache
+async def go_back() -> str:
+    """Navigate back in browser history"""
+    global driver
     
     try:
-        element = elements_cache[element_index]
-        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
-        time.sleep(0.2)
-        element.click()
-        time.sleep(0.5)
-        return f"✓ Clicked element {element_index}"
-    
-    except StaleElementReferenceException:
-        return f"✗ Element {element_index} is stale - call get_page_state() to refresh"
-    except Exception as e:
-        return f"✗ Failed: {str(e)}"
-
-async def js_click(element_index: int) -> str:
-    global driver, elements_cache
-    
-    try:
-        element = elements_cache[element_index]
-        driver.execute_script("arguments[0].click();", element)
-        time.sleep(0.5)
-        return f"✓ JS clicked element {element_index}"
+        driver.back()
+        time.sleep(1)
+        return "✓ Navigated back"
     except Exception as e:
         return f"✗ Failed: {str(e)}"
 
 
-async def type_text(element_index: int, text: str, clear_first: bool = True) -> str:
-    global driver, elements_cache
+async def handle_alert(action: str = "accept") -> str:
+    """Handle JS alert: 'accept' or 'dismiss'"""
+    global driver
     
     try:
-        element = elements_cache[element_index]
-        
-        contenteditable = element.get_attribute("contenteditable")
-        is_contenteditable = contenteditable == "true"
-        
-        # Detect Mac vs Windows/Linux
-        is_mac = platform.system() == "Darwin"
-        modifier_key = Keys.COMMAND if is_mac else Keys.CONTROL
-        print(f"  DEBUG: is_mac={is_mac}, using {'CMD' if is_mac else 'CTRL'}")
-        
-        if is_contenteditable:
-            print("  DEBUG: Using clipboard paste method")
-            
-            element.click()
-            time.sleep(0.3)
-            
-            if clear_first:
-                ActionChains(driver).key_down(modifier_key).send_keys('a').key_up(modifier_key).perform()
-                ActionChains(driver).send_keys(Keys.DELETE).perform()
-                time.sleep(0.2)
-            
-            # Paste from clipboard
-            import pyperclip
-            pyperclip.copy(text)
-            print(f"  DEBUG: Copied to clipboard: {pyperclip.paste()}")
-            
-            ActionChains(driver).key_down(modifier_key).send_keys('v').key_up(modifier_key).perform()
-            time.sleep(0.3)
-            print("  DEBUG: Pressed CMD+V")
-            
+        alert = driver.switch_to.alert
+        text = alert.text
+        if action == "accept":
+            alert.accept()
         else:
-            if clear_first:
-                element.clear()
-            element.send_keys(text)
-        
-        return f"✓ Typed '{text}' into element {element_index}"
-    
+            alert.dismiss()
+        return f"✓ Alert {action}ed: {text}"
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return f"✗ Failed: {str(e)}"
+        return f"✗ No alert or failed: {str(e)}"
 
 
 async def scroll(direction: str = "down", amount: int = 500) -> str:
@@ -127,192 +75,327 @@ async def scroll(direction: str = "down", amount: int = 500) -> str:
         return f"✗ Failed: {str(e)}"
 
 
-
-
-# tools.py - Universal get_page_state()
-
-async def get_page_state(include_text: bool = False, verbosity: str = "normal") -> str:
-    """
-    Extract page state that works for ANY website.
-    
-    verbosity: 
-    - "minimal": Just basic interactive elements
-    - "normal": Standard info (default)
-    - "detailed": Rich context for complex apps
-    """
+async def type_text(element_index: int, text: str, clear_first: bool = True) -> str:
     global driver, elements_cache
     
     try:
-        new_cache = []
+        element = elements_cache[element_index]
         
-        # Universal selectors that work everywhere
-        selectors = [
-            # Standard HTML
-            "a[href]", "button", "input", "textarea", "select",
+        contenteditable = element.get_attribute("contenteditable")
+        is_contenteditable = contenteditable == "true"
+        
+        # Detect Mac vs Windows/Linux
+        is_mac = platform.system() == "Darwin"
+        modifier_key = Keys.COMMAND if is_mac else Keys.CONTROL
+        # print(f"  DEBUG: is_mac={is_mac}, using {'CMD' if is_mac else 'CTRL'}")
+        
+        if is_contenteditable:
+            print("  DEBUG: Using clipboard paste method")
             
-            # Modern web apps (ARIA roles)
-            "[role='button']", "[role='link']", "[role='textbox']",
-            "[role='listitem']", "[role='menuitem']", "[role='tab']",
-            "[role='checkbox']", "[role='radio']", "[role='row']",
+            element.click()
+            time.sleep(0.3)
             
-            # Interactive patterns
-            "[onclick]", "[tabindex='0']", "[tabindex='-1']",
-            "[contenteditable='true']",
+            if clear_first:
+                ActionChains(driver).key_down(modifier_key).send_keys('a').key_up(modifier_key).perform()
+                ActionChains(driver).send_keys(Keys.DELETE).perform()
+                time.sleep(0.2)
             
-            # Special elements
-            "iframe", "input[type='file']",
-        ]
+            # Paste from clipboard
+            print("hello")
+            pyperclip.copy(text)
+            print(f"  DEBUG: Copied to clipboard: {pyperclip.paste()}")
+            
+            ActionChains(driver).key_down(modifier_key).send_keys('v').key_up(modifier_key).perform()
+            time.sleep(0.3)
+            print("  DEBUG: Pressed CMD+V")
+            
+        else:
+            if clear_first:
+                element.clear()
+            element.send_keys(text)
         
-        all_elements = driver.find_elements(By.CSS_SELECTOR, ", ".join(selectors))
-        
-        state_lines = [
-            f"Page: {driver.title}",
-            f"URL: {driver.current_url}",
-            ""
-        ]
-        
-        # Detect page type to adjust detail level
-        url = driver.current_url.lower()
-        is_complex_app = any(domain in url for domain in [
-            'whatsapp', 'slack', 'discord', 'notion', 'figma', 
-            'gmail', 'outlook', 'teams', 'zoom'
-        ])
-        
-        # Auto-adjust verbosity for complex apps
-        if is_complex_app and verbosity == "normal":
-            verbosity = "detailed"
-            state_lines.append("ℹ️ Complex web app detected - using detailed mode")
-            state_lines.append("")
-        
-        state_lines.append("Interactive elements:")
-        
-        for element in all_elements:
-            try:
-                if not element.is_displayed():
-                    continue
-                
-                # === BASIC INFO (always collected) ===
-                tag = element.tag_name
-                text = (element.text or "").strip()[:100]
-                role = element.get_attribute("role") or ""
-                aria_label = element.get_attribute("aria-label") or ""
-                el_type = element.get_attribute("type") or ""
-                placeholder = element.get_attribute("placeholder") or ""
-                name = element.get_attribute("name") or ""
-                title = element.get_attribute("title") or ""
-                value = element.get_attribute("value") or ""
-                
-                idx = len(new_cache)
-                
-                # === BUILD DESCRIPTION ===
-                if verbosity == "minimal":
-                    # Just tag, role, and main identifier
-                    desc = f"[{idx}] <{tag}>"
-                    if role:
-                        desc += f" role='{role}'"
-                    if text:
-                        desc += f" '{text[:50]}'"
-                    elif aria_label:
-                        desc += f" '{aria_label[:50]}'"
-                
-                elif verbosity == "detailed":
-                    # Rich context for complex apps
-                    desc_parts = [f"[{idx}]"]
-                    
-                    # Tag + role
-                    if role:
-                        desc_parts.append(f"<{tag} role={role}>")
-                    else:
-                        desc_parts.append(f"<{tag}>")
-                    
-                    # Type
-                    if el_type:
-                        desc_parts.append(f"type={el_type}")
-                    
-                    # Main text/label (most important!)
-                    main_identifier = text or aria_label or placeholder or title or value or name
-                    if main_identifier:
-                        desc_parts.append(f'"{main_identifier[:80]}"')
-                    
-                    # Parent context if element has no clear text
-                    if not text and verbosity == "detailed":
-                        try:
-                            parent = element.find_element(By.XPATH, "..")
-                            parent_role = parent.get_attribute("role")
-                            parent_text = parent.text.strip()[:50] if parent.text else ""
-                            
-                            if parent_role and parent_role != role:
-                                desc_parts.append(f"(in {parent_role})")
-                            elif parent_text and parent_text != text:
-                                desc_parts.append(f"(in '{parent_text}')")
-                        except:
-                            pass
-                    
-                    # Get nested text if element is empty
-                    if not text and len(desc_parts) <= 3:
-                        try:
-                            children = element.find_elements(By.XPATH, ".//*[text()]")
-                            if children:
-                                nested = " | ".join([c.text.strip()[:30] for c in children[:2] if c.text.strip()])
-                                if nested:
-                                    desc_parts.append(f"contains: {nested}")
-                        except:
-                            pass
-                    
-                    desc = " ".join(desc_parts)
-                
-                else:  # normal
-                    # Balanced: clear but not overwhelming
-                    desc = f"[{idx}] <{tag}"
-                    if role:
-                        desc += f" role={role}"
-                    if el_type:
-                        desc += f" type={el_type}"
-                    desc += ">"
-                    
-                    # Best available identifier
-                    identifier = text or aria_label or placeholder or title or name
-                    if identifier:
-                        desc += f' "{identifier[:60]}"'
-                
-                state_lines.append(desc)
-                new_cache.append(element)
-                
-            except (StaleElementReferenceException, Exception):
-                continue
-        
-        elements_cache = new_cache
-        
-        state_lines.append(f"\nTotal: {len(new_cache)} interactive elements")
-        
-        # Include page text if requested OR if very few elements found
-        if include_text or len(new_cache) < 5:
-            try:
-                body_text = driver.find_element(By.TAG_NAME, "body").text
-                lines = [l.strip() for l in body_text.split('\n') if l.strip() and len(l.strip()) > 2]
-                
-                # Remove duplicates (common in SPAs)
-                unique_lines = []
-                seen = set()
-                for line in lines[:40]:
-                    if line not in seen:
-                        unique_lines.append(line)
-                        seen.add(line)
-                        if len(unique_lines) >= 25:
-                            break
-                
-                if unique_lines:
-                    state_lines.append("\n--- Visible Text ---")
-                    state_lines.extend(unique_lines)
-            except:
-                pass
-        
-        return "\n".join(state_lines)
+        return f"✓ Typed '{text}' into element {element_index}"
     
     except Exception as e:
         import traceback
         traceback.print_exc()
         return f"✗ Failed: {str(e)}"
+
+
+
+
+
+
+async def upload_file_auto(file_path: str) -> str:
+    """
+    Upload file on any website. Finds hidden file inputs automatically.
+    
+    file_path can be:
+    - Just filename: "resume.pdf" → searches common folders
+    - Relative path: "docs/resume.pdf" 
+    - Absolute path: "/Users/john/resume.pdf"
+    - Home path: "~/Documents/resume.pdf"
+    """
+    global driver
+    import os
+    
+    original_input = file_path
+    
+    # Expand home directory (~)
+    file_path = os.path.expanduser(file_path)
+    
+    # If not absolute, search common locations
+    if not os.path.isabs(file_path):
+        search_locations = [
+            os.getcwd(),                           # Current directory
+            os.path.expanduser('~/Documents'),     # Documents
+            os.path.expanduser('~/Downloads'),     # Downloads
+            os.path.expanduser('~/Desktop'),       # Desktop
+            os.path.expanduser('~'),               # Home folder
+        ]
+        
+        found = False
+        for base in search_locations:
+            full_path = os.path.join(base, file_path)
+            if os.path.exists(full_path):
+                file_path = full_path
+                found = True
+                break
+        
+        if not found:
+            # List what we searched
+            return f"✗ File '{original_input}' not found. Searched: Documents, Downloads, Desktop, Home"
+    
+    # Final check
+    if not os.path.exists(file_path):
+        return f"✗ File not found: {file_path}"
+    
+    try:
+        # Find ANY file input on the page (works for any website)
+        file_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
+        
+        if not file_inputs:
+            return "✗ No file upload element found on page"
+        
+        # Use the first available file input
+        file_input = file_inputs[0]
+        file_input.send_keys(file_path)
+        time.sleep(1)
+        
+        return f"✓ File uploaded: {os.path.basename(file_path)} (from {file_path})"
+    
+    except Exception as e:
+        return f"✗ Failed: {str(e)}"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# display saga
+
+
+async def get_page_state(include_text=False, verbosity="normal"):
+    """Enhanced to capture popup/modal content"""
+    global elements_cache  # ← Add this
+    
+    script = """
+    const elements = [];
+    
+    // Scan multiple DOM layers
+    const layers = [
+        document.body,  // Main content
+        ...document.querySelectorAll('[role="dialog"]'),  // Modals
+        ...document.querySelectorAll('[role="menu"]'),  // Dropdowns
+        ...document.querySelectorAll('.popup, .modal, .overlay, [class*="popup"], [class*="modal"]'),
+        ...document.querySelectorAll('[aria-modal="true"]'),
+        ...document.querySelectorAll('[data-testid*="menu"], [data-testid*="modal"]')
+    ];
+    
+    // Get all interactive elements from ALL layers
+    layers.forEach(layer => {
+        if (!layer) return;
+        
+        const interactive = layer.querySelectorAll(
+            'button, a, input, textarea, [role="button"], [contenteditable], ' +
+            '[onclick], select, [role="menuitem"], [role="option"]'
+        );
+        
+        interactive.forEach(el => {
+            // Check if element is actually visible
+            const rect = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            
+            if (rect.width > 0 && rect.height > 0 && 
+                style.display !== 'none' && 
+                style.visibility !== 'hidden' &&
+                style.opacity !== '0') {
+                
+                // Store actual element reference
+                elements.push(el);
+            }
+        });
+    });
+    
+    return elements;
+    """
+    
+    # Get actual element references
+    raw_elements = driver.execute_script(script)
+    
+    # Update global cache with actual WebElement objects
+    elements_cache = raw_elements
+    
+    # Now extract info for display
+    element_info = []
+    for idx, el in enumerate(raw_elements):
+        try:
+            info = driver.execute_script("""
+                const el = arguments[0];
+                const style = window.getComputedStyle(el);
+                const layer = el.closest('[role="dialog"], [role="menu"], [aria-modal="true"]') || document.body;
+                
+                return {
+                    index: arguments[1],
+                    tag: el.tagName.toLowerCase(),
+                    text: el.textContent.trim().slice(0, 100),
+                    type: el.type || el.getAttribute('role') || '',
+                    ariaLabel: el.getAttribute('aria-label') || '',
+                    dataIcon: el.getAttribute('data-icon') || '',
+                    classes: el.className,
+                    isInPopup: layer !== document.body,
+                    zIndex: style.zIndex
+                };
+            """, el, idx)
+            element_info.append(info)
+        except:
+            continue
+    
+    # Helper function to format element info
+    def format_element(el):
+        parts = [f"[{el['index']}]"]
+        
+        if el.get('tag'):
+            parts.append(el['tag'])
+        
+        if el.get('type'):
+            parts.append(f"type={el['type']}")
+        
+        # Show if it's in a popup
+        if el.get('isInPopup'):
+            parts.append("🔴POPUP")
+        
+        # WhatsApp data-icon
+        if el.get('dataIcon'):
+            parts.append(f"icon={el['dataIcon']}")
+        
+        # Aria label
+        if el.get('ariaLabel'):
+            parts.append(f"aria={el['ariaLabel'][:50]}")
+        
+        # Text content
+        if el.get('text'):
+            parts.append(f"'{el['text'][:60]}'")
+        
+        return " ".join(parts)
+    
+    # Format output highlighting popup elements
+    output = [f"URL: {driver.current_url}", f"Title: {driver.title}", ""]
+    
+    popup_elements = [e for e in element_info if e.get('isInPopup')]
+    if popup_elements:
+        output.append("=== POPUP/MODAL ELEMENTS (PRIORITY) ===")
+        for el in popup_elements[:20]:
+            output.append(format_element(el))
+        output.append("")
+    
+    output.append("=== PAGE ELEMENTS ===")
+    for el in [e for e in element_info if not e.get('isInPopup')][:30]:
+        output.append(format_element(el))
+    
+    if include_text:
+        output.append("\n=== PAGE TEXT ===")
+        output.append(driver.execute_script("return document.body.innerText;")[:2000])
+    
+    return "\n".join(output)
 
 async def find_elements_by_text(text: str, element_type: str = None) -> str:
     """
@@ -413,6 +496,196 @@ async def find_elements_by_text(text: str, element_type: str = None) -> str:
         return f"✗ Failed: {str(e)}"
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# click saga
+
+async def click(element_index: int) -> str:
+    global driver, elements_cache
+    
+    try:
+        element = elements_cache[element_index]
+        driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
+        time.sleep(0.2)
+        element.click()
+        time.sleep(0.5)
+        return f"✓ Clicked element {element_index}"
+    
+    except StaleElementReferenceException:
+        return f"✗ Element {element_index} is stale - call get_page_state() to refresh"
+    except Exception as e:
+        return f"✗ Failed: {str(e)}"
+
+async def js_click(element_index: int) -> str:
+    global driver, elements_cache
+    
+    try:
+        element = elements_cache[element_index]
+        driver.execute_script("arguments[0].click();", element)
+        time.sleep(0.5)
+        return f"✓ JS clicked element {element_index}"
+    except Exception as e:
+        return f"✗ Failed: {str(e)}"
+
 async def click_element_with_text(text: str) -> str:
     """Universal click-by-text - tries multiple strategies"""
     global driver
@@ -498,92 +771,3 @@ async def hover(element_index: int) -> str:
         return f"✓ Hovered element {element_index}"
     except Exception as e:
         return f"✗ Failed: {str(e)}"
-
-async def upload_file_auto(file_path: str) -> str:
-    """
-    Upload file on any website. Finds hidden file inputs automatically.
-    
-    file_path can be:
-    - Just filename: "resume.pdf" → searches common folders
-    - Relative path: "docs/resume.pdf" 
-    - Absolute path: "/Users/john/resume.pdf"
-    - Home path: "~/Documents/resume.pdf"
-    """
-    global driver
-    import os
-    
-    original_input = file_path
-    
-    # Expand home directory (~)
-    file_path = os.path.expanduser(file_path)
-    
-    # If not absolute, search common locations
-    if not os.path.isabs(file_path):
-        search_locations = [
-            os.getcwd(),                           # Current directory
-            os.path.expanduser('~/Documents'),     # Documents
-            os.path.expanduser('~/Downloads'),     # Downloads
-            os.path.expanduser('~/Desktop'),       # Desktop
-            os.path.expanduser('~'),               # Home folder
-        ]
-        
-        found = False
-        for base in search_locations:
-            full_path = os.path.join(base, file_path)
-            if os.path.exists(full_path):
-                file_path = full_path
-                found = True
-                break
-        
-        if not found:
-            # List what we searched
-            return f"✗ File '{original_input}' not found. Searched: Documents, Downloads, Desktop, Home"
-    
-    # Final check
-    if not os.path.exists(file_path):
-        return f"✗ File not found: {file_path}"
-    
-    try:
-        # Find ANY file input on the page (works for any website)
-        file_inputs = driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
-        
-        if not file_inputs:
-            return "✗ No file upload element found on page"
-        
-        # Use the first available file input
-        file_input = file_inputs[0]
-        file_input.send_keys(file_path)
-        time.sleep(1)
-        
-        return f"✓ File uploaded: {os.path.basename(file_path)} (from {file_path})"
-    
-    except Exception as e:
-        return f"✗ Failed: {str(e)}"
-
-
-async def go_back() -> str:
-    """Navigate back in browser history"""
-    global driver
-    
-    try:
-        driver.back()
-        time.sleep(1)
-        return "✓ Navigated back"
-    except Exception as e:
-        return f"✗ Failed: {str(e)}"
-
-
-async def handle_alert(action: str = "accept") -> str:
-    """Handle JS alert: 'accept' or 'dismiss'"""
-    global driver
-    
-    try:
-        alert = driver.switch_to.alert
-        text = alert.text
-        if action == "accept":
-            alert.accept()
-        else:
-            alert.dismiss()
-        return f"✓ Alert {action}ed: {text}"
-    except Exception as e:
-        return f"✗ No alert or failed: {str(e)}"

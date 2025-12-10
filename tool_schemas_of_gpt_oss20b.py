@@ -128,28 +128,28 @@ BROWSER_TOOLS = [
     },
     
     # === SMART TOOLS (3) ===
-    {
-        "type": "function",
-        "function": {
-            "name": "get_page_state",
-            "description": "Get current page state showing all interactive elements with indices. ALWAYS call this first and after navigation/clicks to see what's available.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "include_text": {
-                        "type": "boolean",
-                        "description": "Include full page text. Default false."
-                    },
-                    "verbosity": {
-                        "type": "string",
-                        "enum": ["minimal", "normal", "detailed"],
-                        "description": "Detail level. Auto-adjusts for complex apps. Default 'normal'."
-                    }
-                },
-                "required": []
-            }
-        }
-    },
+    # {
+    #     "type": "function",
+    #     "function": {
+    #         "name": "get_page_state",
+    #         "description": "Get current page state showing all interactive elements with indices. ALWAYS call this first and after navigation/clicks to see what's available.",
+    #         "parameters": {
+    #             "type": "object",
+    #             "properties": {
+    #                 "include_text": {
+    #                     "type": "boolean",
+    #                     "description": "Include full page text. Default false."
+    #                 },
+    #                 "verbosity": {
+    #                     "type": "string",
+    #                     "enum": ["minimal", "normal", "detailed"],
+    #                     "description": "Detail level. Auto-adjusts for complex apps. Default 'normal'."
+    #                 }
+    #             },
+    #             "required": []
+    #         }
+    #     }
+    # },
     {
         "type": "function",
         "function": {
