@@ -8,9 +8,6 @@ CORE WORKFLOW:
 
 RULES:
 - ONE tool call per response
-- Always get_page_state() after navigation/clicks
-- If click() fails → try js_click() with same index
-- Scroll if element not visible
 
 NAVIGATION:
 - Start at Google → search for website → click result
