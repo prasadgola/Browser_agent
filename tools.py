@@ -101,7 +101,6 @@ async def type_text(element_index: int, text: str, clear_first: bool = True) -> 
                 time.sleep(0.2)
             
             # Paste from clipboard
-            print("hello")
             pyperclip.copy(text)
             print(f"  DEBUG: Copied to clipboard: {pyperclip.paste()}")
             
