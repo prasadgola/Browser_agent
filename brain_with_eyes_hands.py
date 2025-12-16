@@ -5,11 +5,7 @@ Each brain loop: goal + current browser state + single state of last action → 
 import asyncio
 import requests
 from prompts_gpt_oss20b import BROWSER_TOOLS, SYSTEM_PROMPT, PROMPT
-from tools import (
-    open_browser, open_url, click, js_click, type_text,
-    scroll, get_page_state, press_key, hover, upload_file_auto, 
-    go_back, handle_alert, find_elements_by_text, click_element_with_text
-)
+from tools import *
 
 async def brain():
     """Main agent loop"""
@@ -60,6 +56,7 @@ async def brain():
         # continue unpacking the brain signals to multiple nerves until you reach that one signal that lifts the hand and turns the book to next page
         one_signal = brain_signals[0]
         organ = one_signal["function"]["name"]
+        print("organ: ",organ)
         organ_signals = one_signal["function"].get("arguments", {})
 
         if isinstance(organ_signals, str):
