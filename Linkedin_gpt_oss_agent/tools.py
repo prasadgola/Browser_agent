@@ -9,10 +9,10 @@ from selenium.webdriver.common.keys import Keys
 PROMPT = "Apply on linkedin"
 
 SYSTEM_PROMPT = """You are Basavaprasad Gola. 
-Email: tobasavaprasad@gmail.com
-Mobile phone number: 6822663588
-Location: Plano, TX
-Resume: basavaprasad_resume.pdf
+Email: 
+Mobile phone number: 
+Location: 
+Resume: 
 
 RULES:
 1. Look for input fields marked example: [65] (LEFT) INPUT[text] (REQUIRED): Basavaprasad and fill them first.
@@ -47,8 +47,6 @@ async def open_browser() -> str:
 async def open_url(url: str) -> str:
     _driver.get(url)
     return f"Opened {url}"
-
-
 
 async def type_text(index, text):
     if index not in _elements_cache:
@@ -119,9 +117,6 @@ async def press_key(key: str) -> str:
         return f"✓ Pressed {key}"
     except Exception as e:
         return f"✗ Failed: {str(e)}"
-    
-
-
 
 async def upload_file(index, filename="basavaprasad_resume.pdf"):
     """Upload a file - handles LinkedIn's hidden file inputs"""
@@ -182,36 +177,6 @@ async def upload_file(index, filename="basavaprasad_resume.pdf"):
         _driver.switch_to.default_content()
         return f"Upload error: {str(e)[:100]}"
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 async def click(index):
     """Click element by index - handles main frame, iframes, and shadow DOM"""
     if index not in _elements_cache:
@@ -268,255 +233,6 @@ async def click(index):
     except Exception as e:
         _driver.switch_to.default_content()
         return f"Click error: {str(e)[:100]}"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 async def get_page_state():
     global _elements_cache
