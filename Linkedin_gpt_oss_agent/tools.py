@@ -5,22 +5,31 @@ import os
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.action_chains import ActionChains
 
-PROMPT = "Find software engineer jobs"
+PROMPT = "Apply on linkedin"
 
-# --- PROMPTS ---
+SYSTEM_PROMPT = """You are Basavaprasad Gola. 
+Email: tobasavaprasad@gmail.com
+Mobile phone number: 6822663588
+Location: Plano, TX
+Resume: basavaprasad_resume.pdf
 
-SYSTEM_PROMPT = """You have job application web page elements and you have to apply for jobs.
+RULES:
+1. Look for input fields marked example: [65] (LEFT) INPUT[text] (REQUIRED): Basavaprasad and fill them first.
+2. If upload file is required, you MUST upload it first.
+3. If filled all the required fields then click next button.
+4. Try to read the page and move the next page with previous steps.
+
 """
 
 # --- BROWSER TOOLS SCHEMA ---
 
 BROWSER_TOOLS = [
     {"type": "function", "function": {"name": "click", "description": "Click element by index", "parameters": {"type": "object", "properties": {"index": {"type": "integer"}}, "required": ["index"]}}},
+    {"type": "function", "function": {"name": "type_text", "description": "Type text and press Enter", "parameters": {"type": "object", "properties": {"index": {"type": "integer"}, "text": {"type": "string"}}, "required": ["index", "text"]}}},
+    {"type": "function", "function": {"name": "upload_file", "description": "Upload resume file. Default is basavaprasad_resume.pdf", "parameters": {"type": "object", "properties": {"index": {"type": "integer"}, "filename": {"type": "string", "description": "Filename to upload", "default": "basavaprasad_resume.pdf"}}, "required": ["index"]}}},
 ]
 
- # {"type": "function", "function": {"name": "type_text", "description": "Type text and press Enter", "parameters": {"type": "object", "properties": {"index": {"type": "integer"}, "text": {"type": "string"}}, "required": ["index", "text"]}}},
 _driver = None
 _elements_cache = {}
 
@@ -110,6 +119,68 @@ async def press_key(key: str) -> str:
         return f"✓ Pressed {key}"
     except Exception as e:
         return f"✗ Failed: {str(e)}"
+    
+
+
+
+async def upload_file(index, filename="basavaprasad_resume.pdf"):
+    """Upload a file - handles LinkedIn's hidden file inputs"""
+    if index not in _elements_cache:
+        return f"Invalid index {index}"
+    
+    element_info = _elements_cache[index]
+    iframe_idx = element_info.get('iframe')
+    
+    # Get absolute path - look in current directory and common locations
+    possible_paths = [
+        os.path.abspath(filename),
+        os.path.join(os.path.dirname(__file__), filename),
+        os.path.expanduser(f"~/AI Studio/{filename}"),
+    ]
+    
+    file_path = None
+    for p in possible_paths:
+        if os.path.exists(p):
+            file_path = p
+            break
+    
+    if not file_path:
+        return f"File not found: {filename}"
+    
+    try:
+        # Switch to iframe if needed
+        if iframe_idx is not None:
+            iframes = _driver.find_elements(By.TAG_NAME, "iframe")
+            _driver.switch_to.frame(iframes[iframe_idx])
+        
+        # LinkedIn hides file inputs - find ANY file input on the page and make it visible
+        file_input = _driver.execute_script("""
+            const inputs = document.querySelectorAll('input[type="file"]');
+            if (inputs.length > 0) {
+                // Make it interactable
+                inputs[0].style.display = 'block';
+                inputs[0].style.visibility = 'visible';
+                inputs[0].style.opacity = '1';
+                inputs[0].style.position = 'relative';
+                inputs[0].style.width = '100px';
+                inputs[0].style.height = '100px';
+                return inputs[0];
+            }
+            return null;
+        """)
+        
+        if file_input:
+            file_input.send_keys(file_path)
+            _driver.switch_to.default_content()
+            await asyncio.sleep(2)
+            return f"Uploaded {filename}"
+        
+        _driver.switch_to.default_content()
+        return "No file input found on page"
+        
+    except Exception as e:
+        _driver.switch_to.default_content()
+        return f"Upload error: {str(e)[:100]}"
 
 
 
@@ -145,11 +216,6 @@ async def click(index):
     """Click element by index - handles main frame, iframes, and shadow DOM"""
     if index not in _elements_cache:
         return f"Invalid index {index}"
-    
-    # print("clicking:")
-    
-    # print(_elements_cache)
-    # print("================================================================================================================================================\n")
     
     element_info = _elements_cache[index]
     automation_id = element_info['automationId']
@@ -452,10 +518,104 @@ async def click(index):
 
 
 
-
 async def get_page_state():
     global _elements_cache
     _elements_cache = {}
+    def detect_easy_apply_form(_driver):
+        """Detect Easy Apply form by its content, not container selectors"""
+        return _driver.execute_script("""
+        // Method 1: Find by "Apply to" H2 text
+        const allH2 = Array.from(document.querySelectorAll('h2'));
+        const applyH2 = allH2.find(h => h.innerText && h.innerText.includes('Apply to'));
+        
+        // Method 2: Find Dismiss + Next buttons together
+        const allButtons = Array.from(document.querySelectorAll('button'));
+        const dismissBtn = allButtons.find(b => b.innerText && b.innerText.trim() === 'Dismiss');
+        const nextBtn = allButtons.find(b => b.innerText && b.innerText.trim() === 'Next');
+        
+        // Method 3: Find "Contact info" H3
+        const allH3 = Array.from(document.querySelectorAll('h3'));
+        const contactH3 = allH3.find(h => h.innerText && h.innerText.includes('Contact info'));
+        
+        const formDetected = !!(applyH2 || (dismissBtn && nextBtn) || contactH3);
+        
+        if (!formDetected) {
+            return { found: false };
+        }
+        
+        // Find the form container by walking up from applyH2
+        let formContainer = null;
+        if (applyH2) {
+            let parent = applyH2;
+            for (let i = 0; i < 15; i++) {
+                parent = parent.parentElement;
+                if (!parent) break;
+                // Look for a container that has both the H2 and form inputs
+                const hasInputs = parent.querySelectorAll('input, select').length > 0;
+                const hasButtons = parent.querySelectorAll('button').length >= 2;
+                if (hasInputs && hasButtons) {
+                    formContainer = parent;
+                    break;
+                }
+            }
+        }
+        
+        // If no container found via H2, try from dismissBtn
+        if (!formContainer && dismissBtn) {
+            let parent = dismissBtn;
+            for (let i = 0; i < 15; i++) {
+                parent = parent.parentElement;
+                if (!parent) break;
+                const hasInputs = parent.querySelectorAll('input, select').length > 0;
+                if (hasInputs) {
+                    formContainer = parent;
+                    break;
+                }
+            }
+        }
+        
+        // Extract elements from container (or fallback to document)
+        const scope = formContainer || document;
+        const elements = scope.querySelectorAll('button, input, select, textarea, label, h2, h3');
+        
+        // Filter to only form-related elements
+        const formElements = Array.from(elements).filter(el => {
+            const text = el.innerText || el.value || el.placeholder || '';
+            // Include if it's part of the apply form
+            if (el.tagName === 'H2' && text.includes('Apply to')) return true;
+            if (el.tagName === 'H3' && text.includes('Contact info')) return true;
+            if (el.tagName === 'BUTTON' && ['Dismiss', 'Next', 'Submit', 'Review', 'Back'].includes(text.trim())) return true;
+            if (el.tagName === 'LABEL' && ['Email', 'Phone', 'Mobile', 'Country'].some(k => text.includes(k))) return true;
+            if (['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName)) return true;
+            return false;
+        });
+        
+        return {
+            found: true,
+            containerFound: !!formContainer,
+            containerTag: formContainer ? formContainer.tagName : null,
+            containerClass: formContainer ? formContainer.className.substring(0, 100) : null,
+            elements: formElements.map((el, i) => ({
+                idx: i,
+                tag: el.tagName,
+                type: el.type || '',
+                text: (el.innerText || el.value || el.placeholder || '').substring(0, 60).trim(),
+                required: el.required || el.getAttribute('aria-required') === 'true',
+                ariaLabel: el.getAttribute('aria-label') || ''
+            }))
+        };
+    """)
+
+# Test it
+    result = detect_easy_apply_form(_driver)
+    print(f"Form found: {result['found']}")
+    if result['found']:
+        print(f"Container found: {result['containerFound']}")
+        print(f"Container class: {result['containerClass']}")
+        print("Form elements:")
+        for el in result['elements']:
+            req = " [REQUIRED]" if el['required'] else ""
+            print(f"  [{el['idx']}] {el['tag']}({el['type']}): {el['text']}{req}")
     
     try:
         viewport_width = _driver.execute_script("return window.innerWidth;")
@@ -502,7 +662,7 @@ async def get_page_state():
                 x = loc['x'] + element.size['width'] // 2
                 side = "RIGHT" if x > center_threshold else "LEFT"
                 
-                state_parts.append(f"[{idx}] ({side}) {extra}: {text[:60]}")
+                state_parts.append(f"[{idx}] ({side}) {extra}: {text}")
                 idx += 1
             except:
                 continue
@@ -540,7 +700,7 @@ async def get_page_state():
                         x = loc['x'] + element.size['width'] // 2
                         side = "RIGHT" if x > center_threshold else "LEFT"
                         # print(automation_id)                      
-                        state_parts.append(f"[{idx}] ({side}) {extra}: {text[:60]}")
+                        state_parts.append(f"[{idx}] ({side}) {extra}: {text}")
                         idx += 1
                     except:
                         continue
@@ -631,6 +791,7 @@ async def get_page_state():
 
 
 def get_element_context(element, tag):
+
     """Get context for main frame and iframe elements"""
     try:
         if tag == 'input':

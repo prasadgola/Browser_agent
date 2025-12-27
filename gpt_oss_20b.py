@@ -6,6 +6,7 @@ import asyncio
 import requests
 from prompts_gpt_oss20b import BROWSER_TOOLS, SYSTEM_PROMPT, PROMPT
 from tools import *
+import config
 
 async def brain():
     """Main agent loop"""
@@ -26,9 +27,9 @@ async def brain():
 
         # giving brain all signals from eyes and hands and capture nurons that hits the nerves which are non deterministic signals
         row_signals_from_brain = requests.post(
-            "http://localhost:11434/api/chat",
+            config.OLLAMA_API_URL,
             json={
-                "model": "gpt-oss:20b",
+                "model": config.MODEL_NAME,
                 "messages": [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": STATE_FULL_PROMPT}

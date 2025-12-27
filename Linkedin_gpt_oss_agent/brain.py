@@ -6,26 +6,30 @@ from tools import *
 async def brain():
     await open_browser()
     # await open_url("https://www.linkedin.com/jobs/collections/easy-apply/?currentJobId=4328143686&discover=true")
-    await open_url("https://www.linkedin.com")
+    # await open_url("https://www.linkedin.com")
+    await open_url("https://www.google.com")
 
-    action_history = []
+    action_history = ["No action yet"]
 
     
     while True:
 
         page_state = await get_page_state()
+        print("================================================================================================================================================\n")
+        print(action_history)
+        print("================================================================================================================================================\n")
 
         if open("developer_window.txt", "r").read().strip():
             model_input = f"CURRENT PAGE STATE: {page_state} GOAL: {open("developer_window.txt", "r").read().strip()}"
             print("developer_window.txt: ", model_input)
             open("developer_window.txt", "w").write("")
         else:
-            model_input = f"GOAL: {PROMPT} previously you: {'\n'.join(action_history[-8:]) if action_history else '(no actions yet)'} CURRENT PAGE STATE: {page_state} What is the next action? Use the [index] numbers from the output above."
+            model_input = f"what would you click if the GOAL: {PROMPT} previously you: {'\n'.join(action_history[-8:]) if action_history else '(no actions yet)'} CURRENT PAGE STATE: {page_state} \n What is the next tool call? Use the [index] numbers from the output below."
             print("model_input: ", model_input)
         # print("================================================================================================================================================\n")
-
         model_output = requests.post("http://localhost:11434/api/chat",json={"model": "gpt-oss:120b-cloud","messages": [{"role": "system", "content": SYSTEM_PROMPT},{"role": "user", "content": model_input}],"tools": BROWSER_TOOLS,"stream": False},timeout=120).json().get("message", {})
         if not model_output:
+            print("no model output")
             continue
         
         # print("thinking: ", model_output.get("thinking", ""))
@@ -33,6 +37,7 @@ async def brain():
         # print("================================================================================================================================================\n")
 
         if not model_output.get("tool_calls"):
+            print("no tool calls")
             continue
 
         tool_name,tool_args = model_output["tool_calls"][0]["function"]["name"], model_output["tool_calls"][0]["function"].get("arguments", {})
@@ -48,7 +53,7 @@ async def brain():
         except Exception as e:
             result = str(e)
         action_history.append(result)
-        # action_history.pop(0)
+        action_history.pop(0)
 
 if __name__ == "__main__":
     asyncio.run(brain())
