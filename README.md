@@ -1,36 +1,66 @@
-# Browser Automation Agent with Memory
+# Browser Automation Agents
 
-A browser automation agent powered by local LLM (gpt-oss:20b via Ollama) that maintains action history and learns from failures.
+A collection of browser automation agents powered by local LLMs via Ollama. All agents share a common "brain loop" architecture but differ in how they perceive and interact with web pages.
 
-## How It Works
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                     Each Loop                           │
+│                   Brain Loop (all agents)               │
 ├─────────────────────────────────────────────────────────┤
-│  INPUT TO MODEL:                                        │
-│    • Goal: "Post something on X"                        │
-│    • Previous Actions: Last 10 actions taken            │
-│    • Current Browser State: URL, title, elements        │
-│    • Failure Context: If last action failed             │
 │                                                         │
-│  OUTPUT FROM MODEL:                                     │
-│    • Single tool call: click(0) or type_text(1, "hi")   │
+│   ┌─────────┐    ┌─────────┐    ┌─────────┐            │
+│   │  EYES   │───▶│  BRAIN  │───▶│  HANDS  │            │
+│   │ (state) │    │  (LLM)  │    │(actions)│            │
+│   └─────────┘    └─────────┘    └─────────┘            │
+│        ▲                              │                 │
+│        └──────────────────────────────┘                 │
+│                   (repeat)                              │
 │                                                         │
-│  EXECUTION:                                             │
-│    • Execute action with automatic retry (click→js_click)│
-│    • Update action history                              │
-│    • Refresh browser state                              │
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Key Features
+Each loop iteration:
+1. **Eyes** capture current state (DOM or screenshot)
+2. **Brain** (LLM) decides next action based on goal + history + state
+3. **Hands** execute the action
+4. Result stored in action history, loop repeats
 
-- **Action Memory**: Maintains last 10 actions to provide context
-- **Failure Recovery**: Tracks consecutive failures and suggests alternatives
-- **Automatic Retry**: Falls back to js_click when regular click fails
-- **Smart State Management**: Refreshes page state after most actions
-- **Completion Detection**: Recognizes when tasks are done or impossible
+## Agents
+
+### DOM-Based Agents
+
+These agents parse the DOM to extract interactive elements with indices.
+
+| File | Model | Use Case |
+|------|-------|----------|
+| `gpt_oss_20b.py` | gpt-oss:20b | General browser automation |
+| `Linkedin_gpt_oss_agent/` | gpt-oss:120b | LinkedIn job applications |
+
+**How it works:**
+- `get_page_state()` extracts all interactive elements as indexed list
+- Model receives: `[0] BUTTON: Submit`, `[1] INPUT[text]: Search`, etc.
+- Model outputs tool calls like `click(0)` or `type_text(1, "hello")`
+
+**Pros:** Fast, precise element targeting, works with complex forms
+**Cons:** Can miss dynamically loaded content, requires DOM parsing logic
+
+### Vision-Based Agents
+
+These agents use screenshots and coordinate-based clicking.
+
+| File | Model | Use Case |
+|------|-------|----------|
+| `qwen3_vl_30b.py` | qwen3-vl:30b | Multi-image context, bounding box clicks |
+| `gemma3_27b.py` | gemma3:27b | Simple coordinate clicking |
+
+**How it works:**
+- Takes screenshot, sends to vision model as base64
+- Model returns coordinates: `{"x": [396, 476], "y": [200, 240]}`
+- Agent clicks at center of bounding box
+
+**Pros:** Works on any UI, no DOM parsing needed, sees what user sees
+**Cons:** Slower, less precise, coordinate scaling issues
 
 ## Setup
 
@@ -38,94 +68,124 @@ A browser automation agent powered by local LLM (gpt-oss:20b via Ollama) that ma
 # Install dependencies
 pip install -r requirements.txt
 
-# Make sure Ollama is running with gpt-oss:20b
-ollama run gpt-oss:20b
+# Run Ollama with your chosen model
+ollama run gpt-oss:20b          # For DOM agents
+ollama run qwen3-vl:30b         # For vision agent
+ollama run gemma3:27b           # For simple vision agent
 ```
 
 ## Usage
 
-Edit the `PROMPT` in `Prompts_gpt20b.py`:
-
-```python
-PROMPT = "post something on x. User name example@gmail.com and password is ****"
-```
-
-Then run:
-
+### General Browser Automation
 ```bash
-python brain_with_eyes_hands.py
+# Edit PROMPT in prompts_gpt_oss20b.py
+python gpt_oss_20b.py
 ```
 
-## Files
+### LinkedIn Job Applications
+```bash
+# Edit SYSTEM_PROMPT in Linkedin_gpt_oss_agent/tools.py with your info
+cd Linkedin_gpt_oss_agent
+python brain.py
+```
 
-| File | Description |
-|------|-------------|
-| `brain_with_eyes_hands.py` | Main agent loop with memory and retry logic |
-| `tools.py` | Browser automation functions (Selenium) |
-| `Prompts_gpt20b.py` | System prompt, tools schema, and goal |
-| `requirements.txt` | Python dependencies |
+### Vision-Based Automation
+```bash
+# Edit prompt in the file
+python qwen3_vl_30b.py   # With action history
+python gemma3_27b.py     # Simple single-target
+```
 
-## Architecture
+## Project Structure
 
-### Memory System
-- **Action History**: Last 10 actions stored in `signals_from_hand`
-- **Failure Tracking**: Consecutive failures trigger alternative approach prompts
-- **Context Window**: Each model call receives goal + history + current state
+```
+.
+├── gpt_oss_20b.py              # DOM agent with memory
+├── prompts_gpt_oss20b.py       # System prompt & tools for DOM agent
+├── tools.py                    # Shared browser tools (DOM-based)
+├── config.py                   # Ollama API config
+├── qwen3_vl_30b.py             # Vision agent with screenshot history
+├── gemma3_27b.py               # Simple vision agent
+├── Linkedin_gpt_oss_agent/     # LinkedIn-specific automation
+│   ├── brain.py                # Main loop
+│   ├── tools.py                # LinkedIn-optimized tools
+│   └── developer_window.txt    # Runtime goal injection
+└── requirements.txt
+```
 
-### Decision Loop
-1. **Eyes** (`get_page_state`): Capture current browser state
-2. **Brain** (LLM): Decide next action based on goal + history + state
-3. **Hands** (tools): Execute the action with automatic retry
-4. **Memory**: Store result and update failure tracking
-5. Repeat until task complete or failed
+## Key Concepts
 
-### Retry Logic
-When `click()` fails, automatically tries `js_click()` as fallback:
+### Action History
+All agents maintain a history of recent actions to provide context:
+```python
+signals_from_hand = []  # Last N actions
+# Model sees: "1. Clicked [0] Search  2. Typed 'hello'  3. ..."
+```
+
+### Failure Recovery
+DOM agents track consecutive failures and suggest alternatives:
+```python
+if "✗" in result:
+    failure_count += 1
+    # After 2 failures: "Try alternative approach or use task_failed"
+```
+
+### Automatic Retry
+When `click()` fails, DOM agents fall back to `js_click()`:
 ```python
 if organ == "click" and "✗" in turn_the_page:
-    retry_turn_the_page = await js_click(organ_signals["element_index"])
+    retry = await js_click(organ_signals["element_index"])
 ```
 
-## Example Flow
-
-```
-Loop 1: Eyes see Google homepage → Brain: type "twitter" in search
-Loop 2: Eyes see search results → Brain: click first result
-Loop 3: Eyes see Twitter login → Brain: type username
-Loop 4: Eyes see password field → Brain: type password
-Loop 5: Eyes see login button → Brain: click login
-...
+### Visual Feedback
+Vision agents show click indicators on screen:
+```python
+show_click_indicator(x, y, "red")  # Red ring + dot animation
 ```
 
 ## Tool Categories
 
+### DOM Agent Tools
 | Category | Tools |
 |----------|-------|
-| **Navigation** | `scroll`, `go_back` |
-| **Interaction** | `click`, `js_click`, `type_text`, `press_key`, `hover` |
-| **Perception** | `get_page_state`, `find_elements_by_text`, `click_element_with_text` |
-| **Special** | `upload_file_auto`, `handle_alert` |
-| **Completion** | `task_complete`, `task_failed` |
+| Navigation | `scroll`, `go_back` |
+| Interaction | `click`, `js_click`, `type_text`, `press_key`, `hover` |
+| Perception | `get_page_state`, `find_elements_by_text` |
+| Special | `upload_file_auto`, `handle_alert` |
+| Completion | `task_complete`, `task_failed` |
 
-## Metaphor
-
-The code uses a biological metaphor:
-- **Brain**: LLM making decisions
-- **Eyes**: DOM state observation
-- **Hands**: Action execution (click, type, etc.)
-- **Signals**: Data flowing between components
-- **Nerves**: Function calls connecting brain to organs
+### Vision Agent Tools
+| Category | Tools |
+|----------|-------|
+| Interaction | `mouse_click(x, y)`, `type_text`, `press_key` |
+| Navigation | `scroll` |
 
 ## Configuration
 
-Edit `Prompts_gpt20b.py` to customize:
-- `SYSTEM_PROMPT`: Agent behavior and rules
-- `PROMPT`: Your automation goal
-- `BROWSER_TOOLS`: Available tools and their schemas
+### Ollama API
+```python
+# config.py
+OLLAMA_API_URL = "http://localhost:11434/api/chat"
+MODEL_NAME = "gpt-oss:20b"
+```
+
+### Chrome Profile
+All agents use a persistent Chrome profile for maintaining login sessions:
+```python
+profile_path = os.path.expanduser('~/AI Studio/chrome_automation_profile')
+```
 
 ## Requirements
 
 - Python 3.8+
-- Selenium WebDriver
-- Ollama with gpt-oss:20b model running on `localhost:11434`
+- Ollama running locally
 - Chrome/Chromium browser
+- For vision agents: OpenCV (`pip install opencv-python`)
+
+## Tips
+
+1. **Start simple**: Use `gemma3_27b.py` to test vision approach on a single target
+2. **DOM for forms**: Use DOM agents for complex forms with many inputs
+3. **Vision for visual UI**: Use vision agents for apps with non-standard elements
+4. **Check the profile**: Login to sites manually first in the Chrome profile
+5. **LinkedIn**: Easy Apply forms work best; external applications may vary
