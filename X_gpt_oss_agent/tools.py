@@ -7,11 +7,11 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 import time
 
-PROMPT = """ post hi, reply hello, reply bye, reply goodbye
-"""
+# PROMPT = """ post 'What an amazing year it was for software developers. Huge thanks to @apple, @openAI, @google, @Anthropic, @china and all other ai labs for making it fun.' and                                                                                                                      reply 'That's said, I genuinely believe that these ai labs have hidden potential which they are not showing just to stay US economy a head of China, because US economy just staying ahead of china because top 10 software buisnesses.'                                               and reply 'With todays AI labs potential which I truly believe is, can automate all of the top 10 software companies buinesses. So AI labs are not showing true potential is release diverse models just to keep US ahead of china.'                                                        and reply 'I don't know what's the take here but definitely it's not good for software developers who can build more and create more economy than pre-AI(old) software did.'                                                                                                               and reply 'only thing Current AI labs shown pontential models can't do is create more intelligent models than themselfs(Yet, who knows, maybe) or create business so that US economy stays ahead of china.'                                                                                  and reply 'And by the way, this entire thread is being created using @gpt_oss20b model inferenced on macbook m4 pro 48 Unified chip using browser agent. Zero API used.'                                                                                                                              and reply 'Next year is amazing in both rabbit wholes of software developement with model(agents which can take down pre-AI software) and continued models intelligence specific to business. Can't wait to make model do all the pre-AI(old) software development automation.'
+
 
 SYSTEM_PROMPT = """
-You are X browser expert in posting
+You are X.com browser expert in posting and replying.
 """
 
 
@@ -30,7 +30,6 @@ async def open_browser() -> str:
     options = uc.ChromeOptions()
     options.add_argument('--disable-blink-features=AutomationControlled')
     options.add_argument('--start-maximized')
-    # LinkedIn uses window dimensions to fingerprint bots
     options.add_argument('--window-size=1920,1080')
     profile_path = os.path.expanduser('~/AI Studio/chrome_automation_profile')
     _driver = uc.Chrome(options=options, user_data_dir=profile_path)
@@ -45,115 +44,27 @@ async def type_text(index, text):
     
     element_info = _elements_cache.get(index)
     if not element_info:
-        print(f"ERROR: Index {index} not in cache")
         return f"Error: Index {index} not found"  # Return string, not None
     
     automation_id = element_info['automationId']
-    print(f"DEBUG: Looking for element with automation_id: {automation_id}")
     
     try:
         # Find element
         element = _driver.find_element(By.CSS_SELECTOR, f'[data-automation-id="{automation_id}"]')
-        print(f"DEBUG: Found element: {element.tag_name}")
         
         # Click it
         element.click()
-        print("DEBUG: Clicked element")
         time.sleep(0.3)
         
         # Get active element and send keys
         active = _driver.switch_to.active_element
-        print(f"DEBUG: Active element: {active.tag_name}")
         
         active.send_keys(text)
-        print(f"DEBUG: Sent keys: {text}")
         
         return f"type_text {{'index': {index}, 'text': '{text}'}}"  # Return string
         
     except Exception as e:
-        print(f"ERROR: {e}")
         return f"Error typing: {e}"  # Return string, not None
-
-async def press_key(key: str) -> str:
-    global driver
-    
-    try:
-        # Find the active/focused element and send key to it
-        active = driver.switch_to.active_element
-        
-        key_map = {
-            "enter": Keys.ENTER,
-            "tab": Keys.TAB,
-            "escape": Keys.ESCAPE,
-            "backspace": Keys.BACKSPACE,
-            "down": Keys.ARROW_DOWN,
-            "up": Keys.ARROW_UP,
-        }
-        
-        active.send_keys(key_map.get(key.lower(), key))
-        time.sleep(0.3)
-        return f"✓ Pressed {key}"
-    except Exception as e:
-        return f"✗ Failed: {str(e)}"
-
-async def upload_file(index, filename="basavaprasad_resume.pdf"):
-    """Upload a file - handles LinkedIn's hidden file inputs"""
-    if index not in _elements_cache:
-        return f"Invalid index {index}"
-    
-    element_info = _elements_cache[index]
-    iframe_idx = element_info.get('iframe')
-    
-    # Get absolute path - look in current directory and common locations
-    possible_paths = [
-        os.path.abspath(filename),
-        os.path.join(os.path.dirname(__file__), filename),
-        os.path.expanduser(f"~/AI Studio/{filename}"),
-    ]
-    
-    file_path = None
-    for p in possible_paths:
-        if os.path.exists(p):
-            file_path = p
-            break
-    
-    if not file_path:
-        return f"File not found: {filename}"
-    
-    try:
-        # Switch to iframe if needed
-        if iframe_idx is not None:
-            iframes = _driver.find_elements(By.TAG_NAME, "iframe")
-            _driver.switch_to.frame(iframes[iframe_idx])
-        
-        # LinkedIn hides file inputs - find ANY file input on the page and make it visible
-        file_input = _driver.execute_script("""
-            const inputs = document.querySelectorAll('input[type="file"]');
-            if (inputs.length > 0) {
-                // Make it interactable
-                inputs[0].style.display = 'block';
-                inputs[0].style.visibility = 'visible';
-                inputs[0].style.opacity = '1';
-                inputs[0].style.position = 'relative';
-                inputs[0].style.width = '100px';
-                inputs[0].style.height = '100px';
-                return inputs[0];
-            }
-            return null;
-        """)
-        
-        if file_input:
-            file_input.send_keys(file_path)
-            _driver.switch_to.default_content()
-            await asyncio.sleep(2)
-            return f"Uploaded {filename}"
-        
-        _driver.switch_to.default_content()
-        return "No file input found on page"
-        
-    except Exception as e:
-        _driver.switch_to.default_content()
-        return f"Upload error: {str(e)[:100]}"
 
 async def click(index):
     """Click element by index - handles main frame, iframes, and shadow DOM"""
@@ -277,7 +188,6 @@ async def get_page_state():
         """)
         
         if popup_data and len(popup_data) > 0:
-            print("DEBUG: Reply popup detected! Returning only popup elements.")
             
             state_parts = []
             idx = 0
