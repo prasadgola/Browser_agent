@@ -2,6 +2,8 @@
 
 A collection of browser automation agents powered by local LLMs via Ollama. All agents share a common "brain loop" architecture but differ in how they perceive and interact with web pages.
 
+![X Bot Demo](X_gpt_oss_agent/X_Bot.gif)
+
 ## Architecture
 
 ```
