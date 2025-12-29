@@ -6,6 +6,8 @@ A collection of browser automation agents powered by local LLMs via Ollama. All 
 
 ![X Bot Demo](X_gpt_oss_agent/X_Bot.gif)
 
+https://x.com/gola_basava/status/2005356794915545582
+
 ## Architecture
 
 ```
